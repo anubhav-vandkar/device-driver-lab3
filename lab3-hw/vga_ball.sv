@@ -14,50 +14,79 @@
 
 module vga_ball(input logic        clk,
                 input logic        reset,
-                input logic [7:0]  writedata, // Christian's Claude Notes: We will prob need to update this to 16 bits to fit the 640 x 480 resolution. See section 2.2. We will pass in x,y coordinates.
+                input logic [32:0]  writedata, // Updated to 32 bits: left 10 for x, right 9 for y 
                 input logic        write,
                 input logic        chipselect,
-                input logic [2:0]  address, // Christian's Claude Notes: We will need to update this to fit the x and y coordinate registers.
+                input logic [2:0]  address, 
                 output logic [7:0] VGA_R, VGA_G, VGA_B, 
                 output logic       VGA_CLK, VGA_HS, VGA_VS,
                                    VGA_BLANK_n,
                 output logic       VGA_SYNC_n);
 
-   logic [10:0]    hcount;
-   logic [9:0]     vcount;
+  logic [10:0]    hcount;
+  logic [9:0]    vcount;
 
-   logic [7:0]     background_r, background_g, background_b;
+  logic [7:0]     background_r, background_g, background_b;
 
-   // Christan's Claude Notes: We will need registers to store x and y coordinates.
-        
-   vga_counters counters(.clk50(clk), .*);
+  // Christan's Claude Notes: We will need registers to store x (9bits) and y (8bits) coordinates.
+  logic [10:0]    center_x = 11'd320; 
+  logic [9:0]     center_y = 10'd240; //center of ball = center of screen
+  logic [7:0]     radius = 8'd256; //radius of ball
 
-  // Christian's Claude Notes: Need to update the `always_ff` block to handle writing to the x and y coordinate registers. 
-   always_ff @(posedge clk)
-     if (reset) begin
-        background_r <= 8'h0;
-        background_g <= 8'h0;
-        background_b <= 8'h80;
-     end else if (chipselect && write)
-       case (address)
-         3'h0 : background_r <= writedata;
-         3'h1 : background_g <= writedata;
-         3'h2 : background_b <= writedata;
-       endcase
+  //making ball circular : (x-center_x)^2 + (y-center_y)^2 <= radius^2
+  logic [10:0]    dx;
+  logic [9:0]     dy;
+  logic [18:0]    distance_squared;
 
-   always_comb begin
-      {VGA_R, VGA_G, VGA_B} = {8'h0, 8'h0, 8'h0};
-      if (VGA_BLANK_n )
-        // Christian's Claude Notes: We will need to update the hcount and vcount values to check if we are within the bounds of a ball.
-        // Christian's Claude Notes: Look up how we can calculate a ball's shape w/ the equation of a circle.
-        // Christian's Claude Notes: Currently, we make a square.   
-        if (hcount[10:6] == 5'd3 &&
-            vcount[9:5] == 5'd3)
-          {VGA_R, VGA_G, VGA_B} = {8'hff, 8'hff, 8'hff};
-        else
-          {VGA_R, VGA_G, VGA_B} =
-             {background_r, background_g, background_b};
-   end
+  assign dx = (hcount > center_x) ? (hcount - center_x) : (center_x - hcount);
+  assign dy = (vcount > center_y) ? (vcount - center_y) : (center_y - vcount);
+  assign distance_squared = dx*dx + dy*dy;
+
+  vga_counters counters(.clk50(clk), .*);
+
+  always_ff @(posedge clk) begin
+    if (reset) begin
+      background_r <= 8'h0;
+      background_g <= 8'h0;
+      background_b <= 8'h80;
+
+      center_x <= 10'd320; 
+      center_y <= 9'd240; 
+    end else if (chipselect && write)
+    //assign actual center to write data having x and y coords
+      // center_x <= writedata[32:23]; //x coordinate in upper 10 bits
+      // center_y <= writedata[8:0];  //y coordinate in lower 9 bits
+
+      case (address)
+        3'h0 : background_r <= writedata;
+        3'h1 : background_g <= writedata;
+        3'h2 : background_b <= writedata;
+        3'h3 : begin
+          center_x <= writedata[32:23]; //x coordinate in upper 10 bits
+          center_y <= writedata[8:0];  //y coordinate in lower 9 bits
+        end
+      endcase
+
+  end
+
+  always_comb begin
+    {VGA_R, VGA_G, VGA_B} = {8'h0, 8'h0, 8'h0};
+    if (VGA_BLANK_n )
+      // Christian's Claude Notes: We will need to update the hcount and vcount values to check if we are within the bounds of a ball.
+      // Christian's Claude Notes: Look up how we can calculate a ball's shape w/ the equation of a circle.
+      // Christian's Claude Notes: Currently, we make a square.  
+
+      // SQUARE 
+      //if (hcount[10:6] == 5'd3 &&
+      //    vcount[9:5] == 5'd3)
+
+      // CIRCLE
+      if(distance_squared <= radius*radius)
+        {VGA_R, VGA_G, VGA_B} = {8'hff, 8'hff, 8'hff};
+      else
+        {VGA_R, VGA_G, VGA_B} =
+            {background_r, background_g, background_b};
+  end
                
 endmodule
 
