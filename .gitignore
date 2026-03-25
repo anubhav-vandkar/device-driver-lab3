@@ -1,2 +1,2 @@
-linux-headers*
+linux-headers-4.19.0/
 *.gz
