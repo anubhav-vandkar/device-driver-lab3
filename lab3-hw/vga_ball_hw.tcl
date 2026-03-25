@@ -31,6 +31,11 @@ set_module_property REPORT_TO_TALKBACK false
 set_module_property ALLOW_GREYBOX_GENERATION false
 set_module_property REPORT_HIERARCHY false
 
+# Module Assignments
+set_module_assignment embeddedsw.dts.vendor "csee4840"
+set_module_assignment embeddedsw.dts.name "vga_ball"
+set_module_assignment embeddedsw.dts.group "vga"
+
 
 # 
 # file sets
