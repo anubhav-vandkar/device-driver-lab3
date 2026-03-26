@@ -28,10 +28,10 @@ module vga_ball(input logic        clk,
 
   logic [7:0]     background_r, background_g, background_b;
 
-  // Christan's Claude Notes: We will need registers to store x (9bits) and y (8bits) coordinates.
+  // Christan's Claude Notes: We will need registers to store x (10 bits) and y (9 bits) coordinates.
   logic [10:0]    center_x = 11'd320; 
   logic [9:0]     center_y = 10'd240; //center of ball = center of screen
-  logic [7:0]     radius_sq = 8'd256; //radius of ball
+  logic [18:0]     radius_sq = 8'd255; //radius of ball
 
   //making ball circular : (x-center_x)^2 + (y-center_y)^2 <= radius^2
   logic [10:0]    dx;
