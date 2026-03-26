@@ -7,57 +7,88 @@
  * Register map:
  * 
  * Byte Offset  7 ... 0   Meaning
- *        0    |  Red  |  Red component of background color (0-255)
- *        1    | Green |  Green component
- *        2    | Blue  |  Blue component
+ *        0    |  Red [7:0]  |  Red component of background color (0-255)
+ *        4    | Green [7:0] |  Green component
+ *        8    | Blue [7:0]  |  Blue component
+ *       c (12)|  x[31:22] y[8:0]   |  coordinates of ball center (0-639)
  */
 
 module vga_ball(input logic        clk,
                 input logic        reset,
-                input logic [7:0]  writedata, // Christian's Claude Notes: We will prob need to update this to 16 bits to fit the 640 x 480 resolution. See section 2.2. We will pass in x,y coordinates.
+                input logic [31:0]  writedata, // Updated to 32 bits: left 11 for x, right 10 for y 
                 input logic        write,
                 input logic        chipselect,
-                input logic [2:0]  address, // Christian's Claude Notes: We will need to update this to fit the x and y coordinate registers.
+                input logic [2:0]  address, 
                 output logic [7:0] VGA_R, VGA_G, VGA_B, 
                 output logic       VGA_CLK, VGA_HS, VGA_VS,
                                    VGA_BLANK_n,
                 output logic       VGA_SYNC_n);
 
-   logic [10:0]    hcount;
-   logic [9:0]     vcount;
+  logic [10:0]    hcount;
+  logic [9:0]    vcount;
 
-   logic [7:0]     background_r, background_g, background_b;
+  logic [7:0]     background_r, background_g, background_b;
 
-   // Christan's Claude Notes: We will need registers to store x and y coordinates.
-        
-   vga_counters counters(.clk50(clk), .*);
+  logic [9:0]    center_x = 10'd320; 
+  logic [8:0]    center_y = 9'd240; //center of ball = center of screen
+  logic [20:0]   radius_sq = 21'd1024; //radius sq of ball (32)
 
-  // Christian's Claude Notes: Need to update the `always_ff` block to handle writing to the x and y coordinate registers. 
-   always_ff @(posedge clk)
-     if (reset) begin
-        background_r <= 8'h0;
-        background_g <= 8'h0;
-        background_b <= 8'h80;
-     end else if (chipselect && write)
-       case (address)
-         3'h0 : background_r <= writedata;
-         3'h1 : background_g <= writedata;
-         3'h2 : background_b <= writedata;
-       endcase
+  //making ball circular : (x-center_x)^2 + (y-center_y)^2 <= radius^2
+  logic [9:0]    dx;
+  logic [8:0]    dy;
+  logic [19:0]   dx_sq;
+  logic [17:0]   dy_sq;
+  logic [20:0]   distance_sq;
 
-   always_comb begin
-      {VGA_R, VGA_G, VGA_B} = {8'h0, 8'h0, 8'h0};
-      if (VGA_BLANK_n )
-        // Christian's Claude Notes: We will need to update the hcount and vcount values to check if we are within the bounds of a ball.
-        // Christian's Claude Notes: Look up how we can calculate a ball's shape w/ the equation of a circle.
-        // Christian's Claude Notes: Currently, we make a square.   
-        if (hcount[10:6] == 5'd3 &&
-            vcount[9:5] == 5'd3)
-          {VGA_R, VGA_G, VGA_B} = {8'hff, 8'hff, 8'hff};
-        else
-          {VGA_R, VGA_G, VGA_B} =
-             {background_r, background_g, background_b};
-   end
+  assign dx = (hcount[10:1] > center_x) ? (hcount[10:1] - center_x) : (center_x - hcount[10:1]);
+  assign dy = (vcount > center_y) ? (vcount - center_y) : (center_y - vcount);
+  assign dx_sq = dx * dx;
+  assign dy_sq = dy * dy;
+  assign distance_sq = {1'b0, dx_sq} + {2'b0, dy_sq}; // explicit zero-extension
+
+  vga_counters counters(.clk50(clk), .*);
+
+  always_ff @(posedge clk) begin
+    if (reset) begin
+      background_r <= 8'h0;
+      background_g <= 8'h0;
+      background_b <= 8'h80;
+
+      center_x <= 10'd320; 
+      center_y <= 9'd240; 
+      radius_sq <= 21'd1024;
+    end else if (chipselect && write)
+    //assign actual center to write data having x and y coords
+      // center_x <= writedata[32:23]; //x coordinate in upper 10 bits
+      // center_y <= writedata[8:0];  //y coordinate in lower 9 bits
+
+      case (address)
+        3'h0 : background_r <= writedata[7:0];
+        3'h1 : background_g <= writedata[7:0];
+        3'h2 : background_b <= writedata[7:0];
+        3'h3 : begin
+          center_x <= writedata[31:22]; //x coordinate in upper 10 bits
+          center_y <= writedata[8:0];  //y coordinate in lower 9 bits
+        end
+      endcase
+
+  end
+
+  always_comb begin
+    {VGA_R, VGA_G, VGA_B} = {8'h0, 8'h0, 8'h0};
+    if (VGA_BLANK_n )
+
+      // SQUARE 
+      //if (hcount[10:6] == 5'd3 &&
+      //    vcount[9:5] == 5'd3)
+
+      // CIRCLE
+      if(distance_sq <= radius_sq)
+        {VGA_R, VGA_G, VGA_B} = {8'hff, 8'hff, 8'hff};
+      else
+        {VGA_R, VGA_G, VGA_B} =
+            {background_r, background_g, background_b};
+  end
                
 endmodule
 
@@ -138,20 +169,3 @@ module vga_counters(
    assign VGA_CLK = hcount[0]; // 25 MHz clock: rising edge sensitive
    
 endmodule
-
-
-// Extra Christian's Notes:
-// "You may observe that your ball “tears” as it moves across the screen. This is caused by
-// changing the ball’s coordinates while one of its lines is being generated. To fix this, make
-// it so that your ball’s coordinates only change when other lines are being displayed." - Lab 3 Handout.
-// 
-// ======= Claude Notes =======
-//
-// Handle the Tearing Problem
-// Screen tearing happens when you update the ball's coordinates while the electron beam is currently drawing that part of the screen. Halfway through drawing a frame the ball suddenly jumps, causing a torn appearance.
-// The fix conceptually is to have two sets of coordinate registers:
-
-// A buffer register that the processor writes to anytime it wants
-// An active register that the drawing logic actually uses
-
-// You only copy from the buffer to the active register during the vertical blanking interval — the period between frames when no pixels are being drawn (when vcount is greater than 480). This way the ball position only ever updates between complete frames, never mid-frame.
