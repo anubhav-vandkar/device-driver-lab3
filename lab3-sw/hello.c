@@ -104,7 +104,7 @@ int main()
     set_ball_position(&pos);
 
     //when direction changes, change the background color and change direction
-    if((pos.x > WIDTH - 2*VGA_BALL_RADIUS) || (pos.x < VGA_BALL_RADIUS)) {
+    if((pos.x > WIDTH - VGA_BALL_RADIUS - 40) || (pos.x < VGA_BALL_RADIUS)) {
         h_dir = !h_dir;
         set_background_color(&colors[i]);
         i = (i + 1) % COLORS;
