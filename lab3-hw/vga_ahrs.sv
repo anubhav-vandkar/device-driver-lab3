@@ -40,21 +40,6 @@ module vga_ball(input  logic        clk,
   assign pitch_scaled = ($signed(pitch_q39) * 32'sd240) / 32'sd804;
   assign centre_y     = (9'd240 - pitch_scaled[8:0]);
 
-  /*
-   * slope_q39: signed Q3.9 fixed-point slope of the horizon line.
-   * Stored as 16-bit signed; sign-extended for arithmetic.
-   *
-   * Line equation through (CENTRE_X, centre_y) with slope m (Q3.9):
-   *   (vcount - centre_y) = m * (hcount[10:1] - CENTRE_X) / 512
-   *
-   * Rearranged to avoid division (multiply both sides by 512):
-   *   dy * 512 == slope_q39 * dx
-   *
-   * We draw the line with a half-width of 1 pixel:
-   *   |dy * 512 - slope_q39 * dx| <= 512   (1 px tolerance)
-   *
-   * dx and dy are signed -- centre can be anywhere.
-   */
   logic signed [15:0] slope_q39;
 
   logic signed [9:0]  dx_line;
@@ -73,24 +58,21 @@ module vga_ball(input  logic        clk,
   assign rhs      = $signed(slope_q39) * $signed({16'b0, dx_line});
   assign line_err = lhs - rhs;
 
-  /* line is 1 pixel wide -- tolerance of +-512 in the scaled space */
-  assign on_line  = (line_err <= 26'sd512) && (line_err >= -26'sd512);
+  //line width = 4 px
+  assign on_line = (line_err <= 26'sd2048) && (line_err >= -26'sd2048);
 
-  /* circle: (dx)^2 + (dy)^2 <= radius^2  (using unsigned distances) */
   logic [9:0]  dx_u;
   logic [8:0]  dy_u;
   logic [19:0] dx_sq;
   logic [17:0] dy_sq;
   logic [20:0] distance_sq;
 
-  assign dx_u        = (hcount[10:1] > CENTRE_X) ?
-                       (hcount[10:1] - CENTRE_X) : (CENTRE_X - hcount[10:1]);
-  assign dy_u        = (vcount[8:0] > centre_y)  ?
-                       (vcount[8:0] - centre_y)  : (centre_y - vcount[8:0]);
-  assign dx_sq       = dx_u * dx_u;
-  assign dy_sq       = dy_u * dy_u;
+  assign dx_u = (hcount[10:1] > CENTRE_X) ?(hcount[10:1] - CENTRE_X) : (CENTRE_X - hcount[10:1]);
+  assign dy_u = (vcount[8:0] > centre_y) ?(vcount[8:0] - centre_y) : (centre_y - vcount[8:0]);
+  assign dx_sq = dx_u * dx_u;
+  assign dy_sq = dy_u * dy_u;
   assign distance_sq = {1'b0, dx_sq} + {2'b0, dy_sq};
-  assign in_circle   = (distance_sq <= radius_sq);
+  assign in_circle = (distance_sq <= radius_sq);
 
   vga_counters counters(.clk50(clk), .*);
 
