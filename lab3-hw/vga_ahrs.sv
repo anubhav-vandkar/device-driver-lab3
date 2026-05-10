@@ -107,8 +107,10 @@ module vga_ball(input  logic        clk,
         3'h0 : background_r <= writedata[7:0];
         3'h1 : background_g <= writedata[7:0];
         3'h2 : background_b <= writedata[7:0];
-        3'h3 : pitch_q39    <= writedata[11:0];   /* signed Q3.9, 12 bits */
-        3'h4 : slope_q39    <= writedata[15:0];   /* signed Q3.9, 16 bits */
+        3'h3 : begin
+            slope_q39 <= writedata[31:16];
+            pitch_q39 <= writedata[11:0];
+          end
       endcase
   end
 
